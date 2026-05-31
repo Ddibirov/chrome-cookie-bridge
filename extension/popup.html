@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 320px; padding: 16px; font-family: system-ui, sans-serif; background: #fff; color: #333; }
+    h1 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .status { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+    .status.ok { background: #e8f5e9; color: #2e7d32; }
+    .status.warn { background: #fff3e0; color: #e65100; }
+    .status.err { background: #ffebee; color: #c62828; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.ok { background: #4caf50; }
+    .dot.warn { background: #ff9800; }
+    .dot.err { background: #f44336; }
+    label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; color: #666; }
+    textarea, input, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; margin-bottom: 10px; font-family: inherit; }
+    textarea { height: 60px; resize: vertical; }
+    button { width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: #1a73e8; color: #fff; margin-bottom: 8px; }
+    .btn-primary:hover { background: #1557b0; }
+    .btn-secondary { background: #f1f3f4; color: #333; }
+    .btn-secondary:hover { background: #e0e0e0; }
+    .hint { font-size: 11px; color: #999; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h1>🍪 Chrome Cookie Bridge</h1>
+  <div id="status" class="status ok">
+    <span id="dot" class="dot ok"></span>
+    <span id="statusText">Loading…</span>
+  </div>
+
+  <label>Filter domains (one per line, empty = all)</label>
+  <textarea id="filterDomains" placeholder="reddit.com&#10;github.com&#10;youtube.com"></textarea>
+
+  <label>Export interval (minutes)</label>
+  <input type="number" id="intervalMin" value="30" min="5" max="1440">
+
+  <button id="saveBtn" class="btn-primary">💾 Save &amp; Export Now</button>
+  <button id="exportBtn" class="btn-secondary">📥 Export Now (without saving)</button>
+  <div class="hint">Files saved to Downloads: hermes_cookies.json + .txt</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# Chrome extension artifacts
+*.crx
+*.pem
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
