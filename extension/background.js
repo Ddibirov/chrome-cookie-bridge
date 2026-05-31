@@ -2,7 +2,7 @@
 // Auto-exports Chrome cookies on a schedule. Domain filtering optional.
 
 const ALARM_NAME = 'cookie-export';
-const DEFAULT_INTERVAL_MIN = 30;
+const DEFAULT_INTERVAL_MIN = 1440;
 const EXPORT_FILENAME = 'hermes_cookies.json';
 const NETSACPE_FILENAME = 'hermes_cookies.txt';
 
