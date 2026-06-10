@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { width: 320px; padding: 16px; font-family: system-ui, sans-serif; background: #fff; color: #333; }
+    body { width: 340px; padding: 16px; font-family: system-ui, sans-serif; background: #fff; color: #333; }
     h1 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     .status { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
     .status.ok { background: #e8f5e9; color: #2e7d32; }
@@ -23,6 +23,9 @@
     .btn-secondary { background: #f1f3f4; color: #333; }
     .btn-secondary:hover { background: #e0e0e0; }
     .hint { font-size: 11px; color: #999; margin-top: 4px; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .checkbox-row input[type="checkbox"] { width: auto; margin: 0; }
+    .checkbox-row label { display: inline; margin: 0; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -35,12 +38,17 @@
   <label>Filter domains (one per line, empty = all)</label>
   <textarea id="filterDomains" placeholder="reddit.com&#10;github.com&#10;youtube.com"></textarea>
 
+  <div class="checkbox-row">
+    <input type="checkbox" id="preRefresh" checked>
+    <label for="preRefresh">Pre-refresh domains before export (opens each domain to freshen cookies)</label>
+  </div>
+
   <label>Export interval (minutes)</label>
   <input type="number" id="intervalMin" value="1440" min="5" max="1440">
 
   <button id="saveBtn" class="btn-primary">💾 Save &amp; Export Now</button>
   <button id="exportBtn" class="btn-secondary">📥 Export Now (without saving)</button>
-  <div class="hint">Files saved to Downloads: hermes_cookies.json + .txt</div>
+  <div class="hint">Files saved to Downloads: hermes_cookies_YYYYMMDD-HHMM.json + .txt</div>
 
   <script src="popup.js"></script>
 </body>

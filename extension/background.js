@@ -1,16 +1,19 @@
-// Chrome Cookie Bridge — Background Service Worker
-// Auto-exports Chrome cookies on a schedule. Domain filtering optional.
+// Chrome Cookie Bridge v2.0.0 — Background Service Worker
+// POSTs cookies to WSL HTTP endpoint instead of chrome.downloads.download
 
 const ALARM_NAME = 'cookie-export';
 const DEFAULT_INTERVAL_MIN = 1440;
-const EXPORT_FILENAME = 'hermes_cookies.json';
-const NETSACPE_FILENAME = 'hermes_cookies.txt';
+const PRE_REFRESH_TIMEOUT_SEC = 15;
+const WSL_ENDPOINT = 'http://localhost:9487/cookies';
 
-// --- Startup ---
 (async () => {
   const { intervalMin = DEFAULT_INTERVAL_MIN } = await chrome.storage.local.get('intervalMin');
+  const effectiveInterval = intervalMin < 30 ? DEFAULT_INTERVAL_MIN : intervalMin;
+  if (effectiveInterval !== intervalMin)
+    await chrome.storage.local.set({ intervalMin: effectiveInterval });
+  console.log(`[Cookie Bridge v2] interval=${effectiveInterval}min`);
   await chrome.alarms.clear(ALARM_NAME);
-  chrome.alarms.create(ALARM_NAME, { periodInMinutes: intervalMin });
+  chrome.alarms.create(ALARM_NAME, { periodInMinutes: effectiveInterval });
   runExport();
 })();
 
@@ -18,15 +21,57 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) runExport();
 });
 
-// --- Export logic ---
+async function getPreRefreshDomains(filterDomains) {
+  if (filterDomains.length > 0)
+    return filterDomains.map(d => d.toLowerCase().trim()).filter(Boolean);
+  try {
+    const tabs = await chrome.tabs.query({});
+    const hostnames = new Set();
+    for (const t of tabs) {
+      if (!t.url || !t.url.startsWith('http')) continue;
+      try { hostnames.add(new URL(t.url).hostname.toLowerCase()); } catch {}
+    }
+    return [...hostnames];
+  } catch (err) {
+    console.error('[Cookie Bridge] tabs.query failed:', err);
+    return [];
+  }
+}
+
+async function preRefreshDomains(domains) {
+  if (!domains || domains.length === 0) return;
+  for (const domain of domains) {
+    const url = `https://${domain}`;
+    let tab;
+    try {
+      tab = await chrome.tabs.create({ url, active: false });
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, PRE_REFRESH_TIMEOUT_SEC * 1000);
+        const listener = (tabId, changeInfo) => {
+          if (tabId === tab.id && changeInfo.status === 'complete') {
+            clearTimeout(timeout);
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+      });
+    } catch (err) {
+      console.error(`[Cookie Bridge] pre-refresh ${url}:`, err);
+    } finally {
+      if (tab?.id) try { chrome.tabs.remove(tab.id); } catch {}
+    }
+  }
+}
+
 async function runExport() {
   try {
-    const { filterDomains = [] } = await chrome.storage.local.get('filterDomains');
-    const { format = 'json' } = await chrome.storage.local.get('format');
-
+    const { filterDomains = [], preRefresh = true } = await chrome.storage.local.get(['filterDomains', 'preRefresh']);
+    if (preRefresh) {
+      const domains = await getPreRefreshDomains(filterDomains);
+      if (domains.length > 0) await preRefreshDomains(domains);
+    }
     let allCookies = await chrome.cookies.getAll({});
-
-    // Apply domain filter
     if (filterDomains.length > 0) {
       const filters = filterDomains.map(d => d.toLowerCase().trim()).filter(Boolean);
       allCookies = allCookies.filter(c => {
@@ -34,48 +79,24 @@ async function runExport() {
         return filters.some(f => d === f || d.endsWith('.' + f));
       });
     }
-
     const clean = allCookies.map(c => ({
-      domain: c.domain,
-      name: c.name,
-      value: c.value,
-      path: c.path,
-      secure: c.secure,
-      httpOnly: c.httpOnly,
-      sameSite: c.sameSite,
+      domain: c.domain, name: c.name, value: c.value, path: c.path,
+      secure: c.secure, httpOnly: c.httpOnly, sameSite: c.sameSite,
       expirationDate: c.expirationDate
     }));
-
-    // JSON export
-    const json = JSON.stringify(clean, null, 2);
-    await download(json, EXPORT_FILENAME, 'application/json');
-
-    // Netscape export
-    const netscape = toNetscape(clean);
-    await download(netscape, NETSACPE_FILENAME, 'text/plain');
-
-    await chrome.storage.local.set({
-      lastExport: Date.now(),
-      cookieCount: clean.length
+    const response = await fetch(WSL_ENDPOINT, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clean)
     });
-
-    console.log(`[Cookie Bridge] Exported ${clean.length} cookies`);
+    if (!response.ok) throw new Error(`WSL endpoint ${response.status}: ${await response.text()}`);
+    const result = await response.json();
+    console.log(`[Cookie Bridge v2] Exported ${result.count} cookies → ${result.files?.join(', ')}`);
+    await chrome.storage.local.set({ lastExport: Date.now(), cookieCount: clean.length });
   } catch (err) {
-    console.error('[Cookie Bridge] Export failed:', err);
+    console.error('[Cookie Bridge v2] Export failed:', err);
   }
 }
 
-async function download(content, filename, mime) {
-  const dataUrl = `data:${mime};charset=utf-8,` + encodeURIComponent(content);
-  await chrome.downloads.download({
-    url: dataUrl,
-    filename,
-    conflictAction: 'overwrite',
-    saveAs: false
-  });
-}
-
-// --- Message handling (popup triggers) ---
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'export') {
     runExport().then(() => {
@@ -85,18 +106,3 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     });
   }
 });
-
-function toNetscape(cookies) {
-  const lines = ['# Netscape HTTP Cookie File', '# Exported by Chrome Cookie Bridge', ''];
-  for (const c of cookies) {
-    const domain = (c.domain || '').startsWith('.') ? c.domain : '.' + (c.domain || '');
-    const flag = domain.startsWith('.') ? 'TRUE' : 'FALSE';
-    const path = c.path || '/';
-    const secure = c.secure ? 'TRUE' : 'FALSE';
-    const expiry = c.expirationDate ? String(Math.round(c.expirationDate)) : '0';
-    const name = c.name || '';
-    const value = c.value || '';
-    lines.push(`${domain}\t${flag}\t${path}\t${secure}\t${expiry}\t${name}\t${value}`);
-  }
-  return lines.join('\n');
-}
